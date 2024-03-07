@@ -1,0 +1,81 @@
+.libPaths() # escribir ruta donde tiene almacenadas sus librerías (opcional)
+library(spiderbar)
+library(tidytext)
+library(httr)
+library(rvest) 
+library(polite)
+library(tidyverse)
+library(lubridate)
+library(tm)  
+library(xml2)
+
+# Leer y abrir página ####
+
+url_clas <- "https://www.sbs.gob.pe/app/iece/paginas/MostrarResumenClasificaciones.aspx"
+web_clas <- url_clas %>% read_html()
+
+# Extraer elementos ####
+
+web_clas_2 <- web_clas %>% html_elements("body")
+web_clas_3 <- web_clas_2 %>% html_elements("form")
+web_clas_4 <- web_clas_3 %>% html_elements("div")
+web_clas_5 <- xml_children(web_clas_4[[4]])
+web_clas_6 <- xml_children(web_clas_5[[2]])
+web_clas_7 <- xml2::as_list(web_clas_6) %>% bind_rows()
+
+# Titulos ####
+
+web_entidad <- xml_children(web_clas_6[[1]])
+web_entidad_2 <- xml2::as_list(web_entidad)
+web_entidad_tipo <- web_entidad_2[[1]][1][[1]]
+web_entidad_titulo <- web_entidad_2[[2]][1][[1]]
+web_entidad_clas_apoyo <- web_entidad_2[[3]][[1]][[1]]
+web_entidad_clas_class <- web_entidad_2[[4]][[1]][[1]]
+web_entidad_clas_jcr <- web_entidad_2[[5]][[1]][[1]]
+web_entidad_clas_micro <- web_entidad_2[[6]][[1]][[1]]
+web_entidad_clas_moody <- web_entidad_2[[7]][[1]][[1]]
+web_entidad_clas_pcr <- web_entidad_2[[8]][[1]][[1]]
+consolidado_titulo <- cbind(web_entidad_tipo, web_entidad_titulo,web_entidad_clas_apoyo, web_entidad_clas_class, web_entidad_clas_jcr, web_entidad_clas_micro, web_entidad_clas_moody, web_entidad_clas_pcr)
+
+
+plantilla_fila <- data.frame(matrix(NA, nrow = 1, ncol = 8))
+plantilla_clas <- data.frame(matrix(NA, nrow = 0, ncol = 8))
+colnames(plantilla_fila) <- colnames(consolidado_titulo)
+colnames(plantilla_clas) <- colnames(consolidado_titulo)
+
+
+numeros_pares <- seq(from = 2, to = 136, by = 2)
+
+# Elementos ####
+
+for (i in numeros_pares) {
+  web_entidad <- xml_children(web_clas_6[[i]])
+  web_entidad_2 <- xml2::as_list(web_entidad)
+  web_entidad_tipo <- web_entidad_2[[1]][1][[1]]
+  web_entidad_titulo <- web_entidad_2[[2]][1][[1]]
+  web_entidad_clas_apoyo <- web_entidad_2[[3]]$table$tr$td$a[[1]]
+  web_entidad_clas_class <- web_entidad_2[[4]]$table$tr$td$a[[1]]
+  web_entidad_clas_jcr <- web_entidad_2[[5]]$table$tr$td$a[[1]]
+  web_entidad_clas_micro <- web_entidad_2[[6]]$table$tr$td$a[[1]]
+  web_entidad_clas_moody <- web_entidad_2[[7]]$table$tr$td$a[[1]]
+  web_entidad_clas_pcr <- web_entidad_2[[8]]$table$tr$td$a[[1]]
+  consolidado <- data.frame(cbind(web_entidad_tipo, web_entidad_titulo,web_entidad_clas_apoyo, web_entidad_clas_class, web_entidad_clas_jcr, web_entidad_clas_micro, web_entidad_clas_moody, web_entidad_clas_pcr))
+  plantilla_fila <- left_join(consolidado, plantilla_fila)
+  plantilla_clas <- rbind(plantilla_clas, plantilla_fila)
+}
+
+colnames(plantilla_clas) <- consolidado_titulo
+fecha_y_hora_actual <- format(Sys.time(), "%A %d %B %X")
+fecha_y_hora_actual <- data.frame(fecha_y_hora_actual)
+
+
+# Exportar a Excel ####
+
+setwd("") # escribir ruta donde desea guardar una copia en formato xlsx del dataframe 
+resultado <- 
+  write_xlsx(
+    list(plantilla_clas = plantilla_clas,
+         fecha_y_hora_actual = fecha_y_hora_actual),
+    paste0("Clasificaciones Riesgo ", fecha, ".xlsx"),
+    col_names = TRUE
+  )
